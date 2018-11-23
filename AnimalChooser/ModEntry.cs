@@ -13,21 +13,10 @@ namespace AnimalChooser
     public class ModEntry : Mod {
 
         private ModConfig Config;
-        private const int CHICKEN = 0;
-        private const int COW = 1;
-        private const int PIG = 2;
-        private const int GOAT = 3;
-        private const int SHEEP = 4;
-        private const int RABBIT = 5;
-        private const int DUCK = 6;
-        
-
-
-
 
         private bool choosingAnimal = false;
         private bool drawAnimal = false;
-        private int currentAnimalType = -1;
+        private Animal currentAnimal = Animal.None;
         private int heartLevel = 0;
         private int chickenIndex = 0;
         private int cowIndex = 0;
@@ -123,9 +112,9 @@ namespace AnimalChooser
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
 
                 if (animal != null) {
-                    if (currentAnimalType == CHICKEN) {
+                    if (currentAnimal == Animal.Chicken) {
                         animal.type.Value = chickens[chickenIndex];
-                    } else if (currentAnimalType == COW) {
+                    } else if (currentAnimal == Animal.Cow) {
                         animal.type.Value = cows[cowIndex];
                     }                    
                 }
@@ -148,17 +137,17 @@ namespace AnimalChooser
             int dx;
             int w = 64;
             int h = 64;
-            switch (currentAnimalType) {
-                case CHICKEN:
-                case DUCK:
-                case RABBIT:
+            switch (currentAnimal) {
+                case Animal.Chicken:
+                case Animal.Duck:
+                case Animal.Rabbit:
                     dx = 24;
                     dy += 24;
                     break;
-                case COW:
-                case GOAT:
-                case PIG:
-                case SHEEP:
+                case Animal.Cow:
+                case Animal.Goat:
+                case Animal.Pig:
+                case Animal.Sheep:
                     dx = 64;
                     dy += 88;
                     w = 128;
@@ -171,14 +160,14 @@ namespace AnimalChooser
             int mx = Game1.getMouseX();
             int my = Game1.getMouseY();
             Texture2D texture = chickenTextures[0];
-            switch (currentAnimalType) {
-                case CHICKEN: texture = chickenTextures[chickenIndex]; break;
-                case COW: texture = cowTextures[cowIndex]; break;
-                case DUCK: texture = duckTextures[0]; break;
-                case RABBIT: texture = rabbitTextures[0]; break;
-                case GOAT: texture = goatTextures[0]; break;
-                case PIG: texture = pigTextures[0]; break;
-                case SHEEP: texture = sheepTextures[0]; break;
+            switch (currentAnimal) {
+                case Animal.Chicken: texture = chickenTextures[chickenIndex]; break;
+                case Animal.Cow: texture = cowTextures[cowIndex]; break;
+                case Animal.Duck: texture = duckTextures[0]; break;
+                case Animal.Rabbit: texture = rabbitTextures[0]; break;
+                case Animal.Goat: texture = goatTextures[0]; break;
+                case Animal.Pig: texture = pigTextures[0]; break;
+                case Animal.Sheep: texture = sheepTextures[0]; break;
             }
 
             Game1.spriteBatch.Draw(texture, new Rectangle(mx - dx, my - 64 - dy, w, h), Color.White);
@@ -222,21 +211,21 @@ namespace AnimalChooser
                                 if (type != null) {
                                     choosingAnimal = true;
                                     if (type.Contains("Chicken")) {
-                                        currentAnimalType = CHICKEN;
+                                        currentAnimal = Animal.Chicken;
                                     } else if (type.Contains("Cow")) {
-                                        currentAnimalType = COW;
+                                        currentAnimal = Animal.Cow;
                                     } else if (type.Contains("Pig")) {
-                                        currentAnimalType = PIG;
+                                        currentAnimal = Animal.Pig;
                                     } else if (type.Contains("Goat")) {
-                                        currentAnimalType = GOAT;
+                                        currentAnimal = Animal.Goat;
                                     } else if (type.Contains("Sheep")) {
-                                        currentAnimalType = SHEEP;
+                                        currentAnimal = Animal.Sheep;
                                     } else if (type.Contains("Rabbit")) {
-                                        currentAnimalType = RABBIT;
+                                        currentAnimal = Animal.Rabbit;
                                     } else if (type.Contains("Duck")) {
-                                        currentAnimalType = DUCK;
+                                        currentAnimal = Animal.Duck;
                                     } else {
-                                        currentAnimalType = -1;
+                                        currentAnimal = Animal.None;
                                         choosingAnimal = false;
                                     }
                                     break;
@@ -246,7 +235,7 @@ namespace AnimalChooser
                     }
                 }
 
-                if (currentAnimalType < 0) {
+                if (currentAnimal == Animal.None) {
                     return;
                 }
 
@@ -261,20 +250,20 @@ namespace AnimalChooser
                 }
 
                 if (leftOrRight) {
-                    switch (currentAnimalType) {
-                        case CHICKEN:
+                    switch (currentAnimal) {
+                        case Animal.Chicken:
                             chickenIndex = (delta + chickenIndex + chickens.Count) % chickens.Count;
                             while (!IsChickenTypeUnlocked(chickenIndex)) {
                                 chickenIndex = (delta + chickenIndex + chickens.Count) % chickens.Count;
                             }
                             break;
-                        case COW:
+                        case Animal.Cow:
                             cowIndex = (delta + cowIndex + cows.Count) % cows.Count;
                             break;
                     }
 
-                    if (currentAnimalType == CHICKEN || currentAnimalType == COW) {
-                        animal.displayType = (currentAnimalType == CHICKEN) ? chickens[chickenIndex] : cows[cowIndex];
+                    if (currentAnimal == Animal.Chicken || currentAnimal == Animal.Cow) {
+                        animal.displayType = (currentAnimal == Animal.Chicken) ? chickens[chickenIndex] : cows[cowIndex];
                     }
                 }
             }
