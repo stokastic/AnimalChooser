@@ -77,22 +77,25 @@ namespace AnimalChooser
 
             animalData = Game1.content.Load<Dictionary<string, string>>("Data\\FarmAnimals");
 
-            InputEvents.ButtonPressed += InputEvents_ButtonPressed;
-            ControlEvents.MouseChanged += ControlEvents_MouseChanged;
-            MenuEvents.MenuChanged += MenuEvents_MenuChanged;
-            GraphicsEvents.OnPostRenderEvent += GraphicsEvents_OnPostRenderEvent;
-            GameEvents.OneSecondTick += GameEvents_OneSecondTick;
+            helper.Events.Input.ButtonPressed += OnButtonPressed;
+            helper.Events.Input.MouseWheelScrolled += OnMouseWheelScrolled;
+            helper.Events.Display.MenuChanged += OnMenuChanged;
+            helper.Events.Display.Rendered += OnRendered;
+            helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
         }
 
-        private void ControlEvents_MouseChanged(object sender, EventArgsMouseStateChanged e) {
+        /// <summary>Raised after the player scrolls the mouse wheel.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnMouseWheelScrolled(object sender, MouseWheelScrolledEventArgs e) {
             
             if (!drawAnimal) {
                 return;
             }
 
-            if (e.NewState.ScrollWheelValue < e.PriorState.ScrollWheelValue && heartLevel > 0) {
+            if (e.Delta < 0 && heartLevel > 0) {
                 heartLevel -= 1;
-            } else if (e.NewState.ScrollWheelValue > e.PriorState.ScrollWheelValue && heartLevel < 5) {
+            } else if (e.Delta > 0 && heartLevel < 5) {
                 heartLevel += 1;
             } else {
                 return;
@@ -101,7 +104,10 @@ namespace AnimalChooser
             Game1.playSound("smallSelect");
         }
 
-        private void GameEvents_OneSecondTick(object sender, EventArgs e) {
+        /// <summary>Raised once per second after the game state is updated.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnOneSecondUpdateTicked(object sender, OneSecondUpdateTickedEventArgs e) {
 
             if (!choosingAnimal) {
                 return;
@@ -123,7 +129,10 @@ namespace AnimalChooser
             drawAnimal = true;
         }
 
-        private void GraphicsEvents_OnPostRenderEvent(object sender, EventArgs e) {
+        /// <summary>Raised after the game draws to the sprite patch in a draw tick, just before the final sprite batch is rendered to the screen.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnRendered(object sender, RenderedEventArgs e) {
 
             if (!choosingAnimal) {
                 return;
@@ -179,7 +188,10 @@ namespace AnimalChooser
             }
         }
 
-        private void InputEvents_ButtonPressed(object sender, EventArgsInput e) {
+        /// <summary>Raised after the player presses a button on the keyboard, controller, or mouse.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnButtonPressed(object sender, ButtonPressedEventArgs e) {
 
             if (e.Button == SButton.Escape || e.Button == SButton.E) {
                 choosingAnimal = false;
@@ -282,9 +294,12 @@ namespace AnimalChooser
             }
         }
 
-        private void MenuEvents_MenuChanged(object sender, EventArgsClickableMenuChanged e) {
+        /// <summary>Raised after a game menu is opened, closed, or replaced.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnMenuChanged(object sender, MenuChangedEventArgs e) {
 
-            if (e.PriorMenu is PurchaseAnimalsMenu menu2) {
+            if (e.OldMenu is PurchaseAnimalsMenu menu2) {
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(menu2, "animalBeingPurchased").GetValue();
                 if (animal != null) {
 
@@ -330,9 +345,6 @@ namespace AnimalChooser
                     } else {
                         Monitor.Log($"data is null - key: {key}", LogLevel.Info);
                     }
-
-                    
-
                 }
             }
             choosingAnimal = false;

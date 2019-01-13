@@ -5,6 +5,6 @@
    "Description": "Allows manual selection of animal colour for cows and chickens",
    "UniqueID": "stokastic.AnimalChooser",
    "EntryDll": "AnimalChooser.dll",
-   "MinimumApiVersion": "2.7",
+   "MinimumApiVersion": "2.10.1",
    "UpdateKeys": [ "Nexus:2573" ]
 }
