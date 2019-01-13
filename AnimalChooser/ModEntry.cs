@@ -13,21 +13,10 @@ namespace AnimalChooser
     public class ModEntry : Mod {
 
         private ModConfig Config;
-        private const int CHICKEN = 0;
-        private const int COW = 1;
-        private const int PIG = 2;
-        private const int GOAT = 3;
-        private const int SHEEP = 4;
-        private const int RABBIT = 5;
-        private const int DUCK = 6;
-        
-
-
-
 
         private bool choosingAnimal = false;
         private bool drawAnimal = false;
-        private int currentAnimalType = -1;
+        private Animal currentAnimal = Animal.None;
         private int heartLevel = 0;
         private int chickenIndex = 0;
         private int cowIndex = 0;
@@ -88,22 +77,25 @@ namespace AnimalChooser
 
             animalData = Game1.content.Load<Dictionary<string, string>>("Data\\FarmAnimals");
 
-            InputEvents.ButtonPressed += InputEvents_ButtonPressed;
-            ControlEvents.MouseChanged += ControlEvents_MouseChanged;
-            MenuEvents.MenuChanged += MenuEvents_MenuChanged;
-            GraphicsEvents.OnPostRenderEvent += GraphicsEvents_OnPostRenderEvent;
-            GameEvents.OneSecondTick += GameEvents_OneSecondTick;
+            helper.Events.Input.ButtonPressed += OnButtonPressed;
+            helper.Events.Input.MouseWheelScrolled += OnMouseWheelScrolled;
+            helper.Events.Display.MenuChanged += OnMenuChanged;
+            helper.Events.Display.Rendered += OnRendered;
+            helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
         }
 
-        private void ControlEvents_MouseChanged(object sender, EventArgsMouseStateChanged e) {
+        /// <summary>Raised after the player scrolls the mouse wheel.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnMouseWheelScrolled(object sender, MouseWheelScrolledEventArgs e) {
             
             if (!drawAnimal) {
                 return;
             }
 
-            if (e.NewState.ScrollWheelValue < e.PriorState.ScrollWheelValue && heartLevel > 0) {
+            if (e.Delta < 0 && heartLevel > 0) {
                 heartLevel -= 1;
-            } else if (e.NewState.ScrollWheelValue > e.PriorState.ScrollWheelValue && heartLevel < 5) {
+            } else if (e.Delta > 0 && heartLevel < 5) {
                 heartLevel += 1;
             } else {
                 return;
@@ -112,7 +104,10 @@ namespace AnimalChooser
             Game1.playSound("smallSelect");
         }
 
-        private void GameEvents_OneSecondTick(object sender, EventArgs e) {
+        /// <summary>Raised once per second after the game state is updated.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnOneSecondUpdateTicked(object sender, OneSecondUpdateTickedEventArgs e) {
 
             if (!choosingAnimal) {
                 return;
@@ -123,9 +118,9 @@ namespace AnimalChooser
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
 
                 if (animal != null) {
-                    if (currentAnimalType == CHICKEN) {
+                    if (currentAnimal == Animal.Chicken) {
                         animal.type.Value = chickens[chickenIndex];
-                    } else if (currentAnimalType == COW) {
+                    } else if (currentAnimal == Animal.Cow) {
                         animal.type.Value = cows[cowIndex];
                     }                    
                 }
@@ -134,7 +129,10 @@ namespace AnimalChooser
             drawAnimal = true;
         }
 
-        private void GraphicsEvents_OnPostRenderEvent(object sender, EventArgs e) {
+        /// <summary>Raised after the game draws to the sprite patch in a draw tick, just before the final sprite batch is rendered to the screen.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnRendered(object sender, RenderedEventArgs e) {
 
             if (!choosingAnimal) {
                 return;
@@ -148,17 +146,17 @@ namespace AnimalChooser
             int dx;
             int w = 64;
             int h = 64;
-            switch (currentAnimalType) {
-                case CHICKEN:
-                case DUCK:
-                case RABBIT:
+            switch (currentAnimal) {
+                case Animal.Chicken:
+                case Animal.Duck:
+                case Animal.Rabbit:
                     dx = 24;
                     dy += 24;
                     break;
-                case COW:
-                case GOAT:
-                case PIG:
-                case SHEEP:
+                case Animal.Cow:
+                case Animal.Goat:
+                case Animal.Pig:
+                case Animal.Sheep:
                     dx = 64;
                     dy += 88;
                     w = 128;
@@ -171,14 +169,14 @@ namespace AnimalChooser
             int mx = Game1.getMouseX();
             int my = Game1.getMouseY();
             Texture2D texture = chickenTextures[0];
-            switch (currentAnimalType) {
-                case CHICKEN: texture = chickenTextures[chickenIndex]; break;
-                case COW: texture = cowTextures[cowIndex]; break;
-                case DUCK: texture = duckTextures[0]; break;
-                case RABBIT: texture = rabbitTextures[0]; break;
-                case GOAT: texture = goatTextures[0]; break;
-                case PIG: texture = pigTextures[0]; break;
-                case SHEEP: texture = sheepTextures[0]; break;
+            switch (currentAnimal) {
+                case Animal.Chicken: texture = chickenTextures[chickenIndex]; break;
+                case Animal.Cow: texture = cowTextures[cowIndex]; break;
+                case Animal.Duck: texture = duckTextures[0]; break;
+                case Animal.Rabbit: texture = rabbitTextures[0]; break;
+                case Animal.Goat: texture = goatTextures[0]; break;
+                case Animal.Pig: texture = pigTextures[0]; break;
+                case Animal.Sheep: texture = sheepTextures[0]; break;
             }
 
             Game1.spriteBatch.Draw(texture, new Rectangle(mx - dx, my - 64 - dy, w, h), Color.White);
@@ -190,7 +188,10 @@ namespace AnimalChooser
             }
         }
 
-        private void InputEvents_ButtonPressed(object sender, EventArgsInput e) {
+        /// <summary>Raised after the player presses a button on the keyboard, controller, or mouse.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnButtonPressed(object sender, ButtonPressedEventArgs e) {
 
             if (e.Button == SButton.Escape || e.Button == SButton.E) {
                 choosingAnimal = false;
@@ -222,21 +223,21 @@ namespace AnimalChooser
                                 if (type != null) {
                                     choosingAnimal = true;
                                     if (type.Contains("Chicken")) {
-                                        currentAnimalType = CHICKEN;
+                                        currentAnimal = Animal.Chicken;
                                     } else if (type.Contains("Cow")) {
-                                        currentAnimalType = COW;
+                                        currentAnimal = Animal.Cow;
                                     } else if (type.Contains("Pig")) {
-                                        currentAnimalType = PIG;
+                                        currentAnimal = Animal.Pig;
                                     } else if (type.Contains("Goat")) {
-                                        currentAnimalType = GOAT;
+                                        currentAnimal = Animal.Goat;
                                     } else if (type.Contains("Sheep")) {
-                                        currentAnimalType = SHEEP;
+                                        currentAnimal = Animal.Sheep;
                                     } else if (type.Contains("Rabbit")) {
-                                        currentAnimalType = RABBIT;
+                                        currentAnimal = Animal.Rabbit;
                                     } else if (type.Contains("Duck")) {
-                                        currentAnimalType = DUCK;
+                                        currentAnimal = Animal.Duck;
                                     } else {
-                                        currentAnimalType = -1;
+                                        currentAnimal = Animal.None;
                                         choosingAnimal = false;
                                     }
                                     break;
@@ -246,7 +247,7 @@ namespace AnimalChooser
                     }
                 }
 
-                if (currentAnimalType < 0) {
+                if (currentAnimal == Animal.None) {
                     return;
                 }
 
@@ -261,20 +262,20 @@ namespace AnimalChooser
                 }
 
                 if (leftOrRight) {
-                    switch (currentAnimalType) {
-                        case CHICKEN:
+                    switch (currentAnimal) {
+                        case Animal.Chicken:
                             chickenIndex = (delta + chickenIndex + chickens.Count) % chickens.Count;
                             while (!IsChickenTypeUnlocked(chickenIndex)) {
                                 chickenIndex = (delta + chickenIndex + chickens.Count) % chickens.Count;
                             }
                             break;
-                        case COW:
+                        case Animal.Cow:
                             cowIndex = (delta + cowIndex + cows.Count) % cows.Count;
                             break;
                     }
 
-                    if (currentAnimalType == CHICKEN || currentAnimalType == COW) {
-                        animal.displayType = (currentAnimalType == CHICKEN) ? chickens[chickenIndex] : cows[cowIndex];
+                    if (currentAnimal == Animal.Chicken || currentAnimal == Animal.Cow) {
+                        animal.displayType = (currentAnimal == Animal.Chicken) ? chickens[chickenIndex] : cows[cowIndex];
                     }
                 }
             }
@@ -293,9 +294,12 @@ namespace AnimalChooser
             }
         }
 
-        private void MenuEvents_MenuChanged(object sender, EventArgsClickableMenuChanged e) {
+        /// <summary>Raised after a game menu is opened, closed, or replaced.</summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The event arguments.</param>
+        private void OnMenuChanged(object sender, MenuChangedEventArgs e) {
 
-            if (e.PriorMenu is PurchaseAnimalsMenu menu2) {
+            if (e.OldMenu is PurchaseAnimalsMenu menu2) {
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(menu2, "animalBeingPurchased").GetValue();
                 if (animal != null) {
 
@@ -341,9 +345,6 @@ namespace AnimalChooser
                     } else {
                         Monitor.Log($"data is null - key: {key}", LogLevel.Info);
                     }
-
-                    
-
                 }
             }
             choosingAnimal = false;
