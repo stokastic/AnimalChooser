@@ -113,7 +113,9 @@ namespace AnimalChooser
                 return;
             }
 
-            if (Game1.activeClickableMenu is PurchaseAnimalsMenu menu) {
+            PurchaseAnimalsMenu menu = Game1.activeClickableMenu as PurchaseAnimalsMenu;
+
+            if (menu != null) {
 
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
 
@@ -198,7 +200,9 @@ namespace AnimalChooser
                 drawAnimal = false;
             }
 
-            if (Game1.activeClickableMenu is PurchaseAnimalsMenu menu) {
+            PurchaseAnimalsMenu menu = Game1.activeClickableMenu as PurchaseAnimalsMenu;
+
+            if (menu != null) {
 
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
                 if (e.Button == SButton.MouseLeft) {
@@ -286,8 +290,9 @@ namespace AnimalChooser
                 case 0: return true;
                 case 1: return true;
                 case 2:
-                    Game1.player.basicShipped.TryGetValue(305, out int eggsShipped);
-                    Game1.player.basicShipped.TryGetValue(308, out int mayoShipped);
+                    int eggsShipped, mayoShipped;
+                    Game1.player.basicShipped.TryGetValue(305, out eggsShipped);
+                    Game1.player.basicShipped.TryGetValue(308, out mayoShipped);
                     return Game1.player.eventsSeen.Contains(942069) || Game1.player.hasRustyKey || Config.EnableVoidChickens || eggsShipped > 0 || mayoShipped > 0;
                 case 3: return Game1.player.eventsSeen.Contains(3900074) || Config.EnableBlueChickens;
                 default: return false;
@@ -299,7 +304,8 @@ namespace AnimalChooser
         /// <param name="e">The event arguments.</param>
         private void OnMenuChanged(object sender, MenuChangedEventArgs e) {
 
-            if (e.OldMenu is PurchaseAnimalsMenu menu2) {
+            PurchaseAnimalsMenu menu2 = e.OldMenu as PurchaseAnimalsMenu;
+            if (menu2 != null) {
                 FarmAnimal animal = Helper.Reflection.GetField<FarmAnimal>(menu2, "animalBeingPurchased").GetValue();
                 if (animal != null) {
 
