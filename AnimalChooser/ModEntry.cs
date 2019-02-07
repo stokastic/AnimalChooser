@@ -1,8 +1,8 @@
-﻿using Paritee.StardewValleyAPI.FarmAnimals;
-using PariteeFarmAnimal = Paritee.StardewValleyAPI.FarmAnimals.FarmAnimal;
-using PariteeVoid = Paritee.StardewValleyAPI.FarmAnimals.Variations.Void;
+﻿using AnimalChooser.Integrations;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Paritee.StardewValleyAPI.Buildings.AnimalShop.FarmAnimals;
+using PariteeFarmAnimal = Paritee.StardewValleyAPI.FarmAnimals.FarmAnimal;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
@@ -10,49 +10,34 @@ using StardewValley.Buildings;
 using StardewValley.Menus;
 using System;
 using System.Collections.Generic;
-using Paritee.StardewValleyAPI.Buidlings.AnimalShop;
 using Paritee.StardewValleyAPI.Players;
-using Paritee.StardewValleyAPI.FarmAnimals.Variations;
-using Paritee.StardewValleyAPI.Buidlings.AnimalShop.FarmAnimals;
-using Paritee.StardewValleyAPI.Utilities;
-using FarmAnimalsData = Paritee.StardewValleyAPI.FarmAnimals.Data;
-using FarmAnimalsType = Paritee.StardewValleyAPI.FarmAnimals.Type;
-using System.Linq;
 
 namespace AnimalChooser
 {
     public class ModEntry : Mod {
-
-        public const string BETTER_FARM_ANIMAL_VARIETY_ID = "Paritee.BetterFarmAnimalVariety";
-        private Player Player;
-        private AnimalShop AnimalShop;
-
         private ModConfig Config;
+        private Integrations.PariteeIntegration PariteeIntegration;
 
         private bool choosingAnimal = false;
         private bool drawAnimal = false;
-        private Stock.Name currentAnimal;
+        private string currentStockSelection;
+        private KeyValuePair<int, Paritee.StardewValleyAPI.FarmAnimals.FarmAnimal> currentAnimal;
         private int heartLevel = 0;
-        private int currentIndex = 0;
-        
+
         private Texture2D heartFullTexture;
         private Texture2D heartEmptyTexture;
 
-        private enum Chickens
-        {
-            Normal, 
-            Void, 
-            Blue
-        }
-
         public override void Entry(IModHelper helper)
         {
-            this.Config = Helper.ReadConfig<ModConfig>();
-
+            this.Config = helper.ReadConfig<ModConfig>();
             this.heartFullTexture = helper.Content.Load<Texture2D>("Assets/heartFull.png");
             this.heartEmptyTexture = helper.Content.Load<Texture2D>("Assets/heartEmpty.png");
 
-            helper.Events.GameLoop.GameLaunched += GameLoop_GameLaunched;
+            // Integration events
+            helper.Events.GameLoop.GameLaunched += OnGameLaunched;
+            helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
+
+            // Events
             helper.Events.Input.ButtonPressed += OnButtonPressed;
             helper.Events.Input.MouseWheelScrolled += OnMouseWheelScrolled;
             helper.Events.Display.MenuChanged += OnMenuChanged;
@@ -60,62 +45,41 @@ namespace AnimalChooser
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
         }
 
-        private void GameLoop_GameLaunched(object sender, GameLaunchedEventArgs e)
+        private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
         {
-            this.Player = new Player(Game1.player, this.Helper);
-
-            object api = this.Helper.ModRegistry.GetApi(ModEntry.BETTER_FARM_ANIMAL_VARIETY_ID);
-
-            if (api == null)
-            {
-                // Use the Data/FarmAnimals
-                this.AnimalShop = this.SetupDefaultAnimalShop(this.Player);
-            }
-            else
-            {
-                // Use BFAV's custom configuration values
-                this.AnimalShop = this.Helper.Reflection.GetMethod(api, "GetAnimalShop").Invoke<AnimalShop>(this.Player);
-            }
-
-            // Implement AnimalChooser's config settings
-            this.AnimalShop.FarmAnimalStock.Available[Stock.Name.Chicken] = this.SanitizeChickens(this.AnimalShop.FarmAnimalStock.Available[Stock.Name.Chicken]);
+            // Integrate with Paritee and BFAV
+            this.PariteeIntegration = new PariteeIntegration(this.Helper);
         }
 
-        private AnimalShop SetupDefaultAnimalShop(Player player)
+        private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
         {
-            BlueConfig blueConfig = new BlueConfig(player.HasSeenEvent(Blue.EVENT_ID));
-            Blue blueFarmAnimals = new Blue(blueConfig);
-
-            VoidConfig voidConfig = new VoidConfig(VoidConfig.InShop.Never, player.HasCompletedQuest(PariteeVoid.QUEST_ID));
-            PariteeVoid voidFarmAnimals = new PariteeVoid(voidConfig);
-
-            StockConfig stockConfig = new StockConfig(blueFarmAnimals, voidFarmAnimals);
-            Stock stock = new Stock(stockConfig);
-
-            return new AnimalShop(stock);
+            this.PariteeIntegration.Setup(new Player(Game1.player, this.Helper));
+            this.SanitizeFarmAnimalsForPurchase();
         }
 
-        private string[]  SanitizeChickens(string[] types)
+        private void SanitizeFarmAnimalsForPurchase()
         {
+            FarmAnimalForPurchase chicken = this.PariteeIntegration.GetFarmAnimalForPurchase(PariteeIntegration.VanillaChicken);
+
+            // Check for just in case someone removed chickens from their game
+            if (chicken == null)
+            {
+                return;
+            }
+            
             List<string> sanitized = new List<string>();
-            string baseType = Enums.GetValue(FarmAnimalsType.Base.Chicken);
 
-            foreach (string type in types)
+            foreach (string type in chicken.FarmAnimalTypes)
             {
-                Chickens variation;
-
-                if (type.Equals(this.AnimalShop.FarmAnimalStock.VoidFarmAnimals.ApplyPrefix(baseType)))
-                    variation = Chickens.Void;
-                    else if(type.Equals(this.AnimalShop.FarmAnimalStock.BlueFarmAnimals.ApplyPrefix(baseType)))
-                    variation = Chickens.Blue;
-                else
-                    variation = Chickens.Normal;
+                PariteeIntegration.Chickens variation = this.PariteeIntegration.DetermineChickenVariation(type);
 
                 if (this.IsChickenTypeUnlocked(variation))
+                {
                     sanitized.Add(type);
+                }
             }
 
-            return sanitized.ToArray<string>();
+            chicken.FarmAnimalTypes = sanitized;
         }
 
         /// <summary>Raised after the player scrolls the mouse wheel.</summary>
@@ -124,14 +88,22 @@ namespace AnimalChooser
         private void OnMouseWheelScrolled(object sender, MouseWheelScrolledEventArgs e)
         {
             if (!this.drawAnimal)
+            {
                 return;
+            }
 
             if (e.Delta < 0 && this.heartLevel > 0)
+            {
                 this.heartLevel -= 1;
+            }
             else if (e.Delta > 0 && this.heartLevel < 5)
+            {
                 this.heartLevel += 1;
+            }
             else
+            {
                 return;
+            }
 
             Game1.playSound("smallSelect");
         }
@@ -141,18 +113,17 @@ namespace AnimalChooser
         /// <param name="e">The event arguments.</param>
         private void OnOneSecondUpdateTicked(object sender, OneSecondUpdateTickedEventArgs e)
         {
-
             if (!this.choosingAnimal)
-                return;
-
-            PurchaseAnimalsMenu menu = Game1.activeClickableMenu as PurchaseAnimalsMenu;
-
-            if (menu != null)
             {
-                StardewValley.FarmAnimal animal = Helper.Reflection.GetField<StardewValley.FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
+                return;
+            }
 
-                if (animal != null)
-                    animal.type.Value = this.AnimalShop.FarmAnimalStock.Available[currentAnimal][currentIndex];
+            if (Game1.activeClickableMenu is PurchaseAnimalsMenu menu)
+            {
+                if (Helper.Reflection.GetField<StardewValley.FarmAnimal>(menu, "animalBeingPurchased").GetValue() != null)
+                {
+                    this.Helper.Reflection.GetField<StardewValley.FarmAnimal>(menu, "animalBeingPurchased").SetValue(this.currentAnimal.Value.ToFarmAnimal());
+                }
             }
 
             this.drawAnimal = true;
@@ -164,49 +135,43 @@ namespace AnimalChooser
         private void OnRendered(object sender, RenderedEventArgs e)
         {
             if (!this.choosingAnimal)
-                return;
-
-            if (Game1.globalFade)
-                return;
-
-            int dy = Convert.ToInt32(16 * Math.Sin(0.05 * Game1.ticks));
-            int dx;
-            int w = 64;
-            int h = 64;
-
-            switch (this.currentAnimal)
             {
-                case Stock.Name.Chicken:
-                case Stock.Name.Duck:
-                case Stock.Name.Rabbit:
-                    dx = 24;
-                    dy += 24;
-                    break;
-                case Stock.Name.DairyCow:
-                case Stock.Name.Goat:
-                case Stock.Name.Pig:
-                case Stock.Name.Sheep:
-                    dx = 64;
-                    dy += 88;
-                    w = 128;
-                    h = 128;
-                    break;
-                default:
-                    return;
+                return;
             }
 
+            if (Game1.globalFade)
+            {
+                return;
+            }
+            
+            int dy, dx, w, h;
+
+            if (this.PariteeIntegration.IsCoopDweller(this.currentAnimal.Value))
+            {
+                dx = 24;
+                dy = 24;
+                w = 64;
+                h = 64;
+            }
+            else
+            {
+                dx = 64;
+                dy = 88;
+                w = 128;
+                h = 128;
+            }
+
+            dy += Convert.ToInt32(16 * Math.Sin(0.05 * Game1.ticks));
             dy += this.heartLevel > 0 ? 24 : 0;
+
             int mx = Game1.getMouseX();
             int my = Game1.getMouseY();
 
-            string currentType = this.AnimalShop.FarmAnimalStock.Available[currentAnimal][currentIndex];
-            PariteeFarmAnimal pariteeFarmAnimal = new PariteeFarmAnimal(currentType, this.Player.MyID, this.Player.GetNewID());
-            pariteeFarmAnimal.BecomeAnAdult();
-            Game1.spriteBatch.Draw(pariteeFarmAnimal.Sprite.Texture, new Rectangle(mx - dx, my - 64 - dy, w, h), pariteeFarmAnimal.frontBackSourceRect, Color.White);
+            this.PariteeIntegration.DrawFarmAnimal(this.currentAnimal.Value, mx - dx, my - 64 - dy, w, h);
 
             if (this.heartLevel > 0)
             {
-                for (int i=0; i<5; i++)
+                for (int i = 0; i < 5; i++)
                     Game1.spriteBatch.Draw(i < this.heartLevel ? this.heartFullTexture : this.heartEmptyTexture, new Rectangle(mx - (19 - i * 8) * 4, my - 28, 28, 24), Color.White);
             }
         }
@@ -222,11 +187,8 @@ namespace AnimalChooser
                 this.drawAnimal = false;
             }
 
-            PurchaseAnimalsMenu menu = Game1.activeClickableMenu as PurchaseAnimalsMenu;
-
-            if (menu != null)
+            if (Game1.activeClickableMenu is PurchaseAnimalsMenu menu)
             {
-
                 StardewValley.FarmAnimal animalBeingPurchased = Helper.Reflection.GetField<StardewValley.FarmAnimal>(Game1.activeClickableMenu, "animalBeingPurchased").GetValue();
 
                 if (e.Button == SButton.MouseLeft)
@@ -244,64 +206,78 @@ namespace AnimalChooser
                         this.choosingAnimal = false;
                         this.drawAnimal = false;
                     }
-
-                    foreach (ClickableTextureComponent component in menu.animalsToPurchase)
+                    else if (this.Helper.Reflection.GetField<bool>(menu, "namingAnimal").GetValue())
                     {
-                        if (component.containsPoint((int)e.Cursor.ScreenPixels.X, (int)e.Cursor.ScreenPixels.Y))
+                        this.choosingAnimal = false;
+                        this.drawAnimal = false;
+                    }
+                    else
+                    {
+                        foreach (ClickableTextureComponent component in menu.animalsToPurchase)
                         {
-                            string stockNameString = component.item.Name;
-
-                            if (stockNameString != null)
+                            if (component.containsPoint((int)e.Cursor.ScreenPixels.X, (int)e.Cursor.ScreenPixels.Y))
                             {
-                                this.choosingAnimal = true;
-                                this.currentIndex = 0;
-                                this.currentAnimal = this.AnimalShop.FarmAnimalStock.StringToName(stockNameString);
-                                break;
+                                string stockNameString = component.item.Name;
+
+                                if (stockNameString != null)
+                                {
+                                    this.choosingAnimal = true;
+                                    this.currentStockSelection = stockNameString;
+
+                                    int index = 0;
+                                    string type = this.PariteeIntegration.GetTypeAtIndex(this.currentStockSelection, index);
+                                    PariteeFarmAnimal animal = this.PariteeIntegration.GetFarmAnimal(type);
+                                    this.currentAnimal = new KeyValuePair<int, PariteeFarmAnimal>(index, animal);
+
+                                    break;
+                                }
                             }
                         }
                     }
                 }
 
                 if (!this.choosingAnimal)
+                {
                     return;
+                }
 
-                bool leftOrRight = false;
                 int delta = 0;
 
                 if (e.Button == SButton.Left)
                 {
                     delta = -1;
-                    leftOrRight = true;
                 }
                 else if (e.Button == SButton.Right)
                 {
                     delta = 1;
-                    leftOrRight = true;
                 }
 
-                if (leftOrRight)
+                if (delta != 0)
                 {
-                    int total = this.AnimalShop.FarmAnimalStock.Available[currentAnimal].Length;
-                    this.currentIndex = (delta + currentIndex + total) % total;
-
-                    string type = this.AnimalShop.FarmAnimalStock.Available[currentAnimal][currentIndex];
-                    PariteeFarmAnimal pariteeFarmAnimal = new PariteeFarmAnimal(type, this.Player.GetNewID(), this.Player.MyID);
-                    animalBeingPurchased.displayType = pariteeFarmAnimal.displayType;
+                    int total = this.PariteeIntegration.GetFarmAnimalForPurchase(currentStockSelection).FarmAnimalTypes.Count;
+                    int index = (delta + this.currentAnimal.Key + total) % total;
+                    string type = this.PariteeIntegration.GetTypeAtIndex(this.currentStockSelection, index);
+                    PariteeFarmAnimal animal = this.PariteeIntegration.GetFarmAnimal(type, this.currentAnimal.Value.myID.Value, this.currentAnimal.Value.ownerID.Value);
+                    this.currentAnimal = new KeyValuePair<int, PariteeFarmAnimal>(index, animal);
                 }
             }
         }
 
-        private bool IsChickenTypeUnlocked(Chickens type)
+        private bool IsChickenTypeUnlocked(PariteeIntegration.Chickens type)
         {
             switch (type)
             {
-                case Chickens.Void:
-                    int eggsShipped, mayoShipped;
-                    Game1.player.basicShipped.TryGetValue(305, out eggsShipped);
-                    Game1.player.basicShipped.TryGetValue(308, out mayoShipped);
-                    return Game1.player.eventsSeen.Contains(942069) || Game1.player.hasRustyKey || this.Config.EnableVoidChickens || eggsShipped > 0 || mayoShipped > 0;
-                case Chickens.Blue:
+                case PariteeIntegration.Chickens.Void:
+                    {
+                        Game1.player.basicShipped.TryGetValue(305, out int eggsShipped);
+                        Game1.player.basicShipped.TryGetValue(308, out int mayoShipped);
+
+                        return Game1.player.eventsSeen.Contains(942069) || Game1.player.hasRustyKey || this.Config.EnableVoidChickens || eggsShipped > 0 || mayoShipped > 0;
+                    }
+
+                case PariteeIntegration.Chickens.Blue:
                     return Game1.player.eventsSeen.Contains(3900074) || this.Config.EnableBlueChickens;
+
                 default:
                     return true;
             }
@@ -312,35 +288,20 @@ namespace AnimalChooser
         /// <param name="e">The event arguments.</param>
         private void OnMenuChanged(object sender, MenuChangedEventArgs e)
         {
-            PurchaseAnimalsMenu menu2 = e.OldMenu as PurchaseAnimalsMenu;
-
-            if (menu2 != null)
+            if (e.OldMenu is PurchaseAnimalsMenu menu2)
             {
-                StardewValley.FarmAnimal sdvAnimalBeingPurchased = this.Helper.Reflection.GetField<StardewValley.FarmAnimal>(menu2, "animalBeingPurchased").GetValue();
+                StardewValley.FarmAnimal animalBeingPurchased = this.Helper.Reflection.GetField<StardewValley.FarmAnimal>(menu2, "animalBeingPurchased").GetValue();
 
-                if (sdvAnimalBeingPurchased != null)
+                if (animalBeingPurchased != null)
                 {
-                    string type = this.AnimalShop.FarmAnimalStock.Available[this.currentAnimal][this.currentIndex];
-
-                    PariteeFarmAnimal pariteeFarmAnimal = new PariteeFarmAnimal(type, sdvAnimalBeingPurchased.myID, sdvAnimalBeingPurchased.ownerID);
-
-                    pariteeFarmAnimal.SetFriendshipHearts(this.heartLevel);
+                    this.currentAnimal.Value.SetFriendshipHearts(this.heartLevel);
 
                     if (Config.AnimalStartsAsAdult)
-                        pariteeFarmAnimal.BecomeAnAdult();
+                    {
+                        this.currentAnimal.Value.BecomeAnAdult();
+                    }
 
-                    sdvAnimalBeingPurchased.type.Value = pariteeFarmAnimal.type;
-                    sdvAnimalBeingPurchased.displayType = pariteeFarmAnimal.displayType;
-                    sdvAnimalBeingPurchased.sound.Value = pariteeFarmAnimal.sound;
-                    sdvAnimalBeingPurchased.defaultProduceIndex.Value = pariteeFarmAnimal.defaultProduceIndex;
-                    sdvAnimalBeingPurchased.deluxeProduceIndex.Value = pariteeFarmAnimal.deluxeProduceIndex;
-                    sdvAnimalBeingPurchased.age.Value = pariteeFarmAnimal.age;
-                    sdvAnimalBeingPurchased.Sprite = pariteeFarmAnimal.Sprite;
-                    sdvAnimalBeingPurchased.price.Value = pariteeFarmAnimal.price;
-                    sdvAnimalBeingPurchased.friendshipTowardFarmer.Value = pariteeFarmAnimal.friendshipTowardFarmer;
-                    sdvAnimalBeingPurchased.fullnessDrain.Value = pariteeFarmAnimal.fullnessDrain;
-                    sdvAnimalBeingPurchased.happinessDrain.Value = pariteeFarmAnimal.happinessDrain;
-                    sdvAnimalBeingPurchased.meatIndex.Value = pariteeFarmAnimal.meatIndex;
+                    this.Helper.Reflection.GetField<StardewValley.FarmAnimal>(menu2, "animalBeingPurchased").SetValue(this.currentAnimal.Value.ToFarmAnimal());
                 }
             }
 
